@@ -1,0 +1,68 @@
+*wsbutler.nvim.txt*            Whitespace butler for Neovim
+
+==============================================================================
+INTRODUCTION                                               *wsbutler.nvim* *wsbutler.nvim-intro*
+wsbutler trims trailing whitespace only in ranges you edited, keeps the
+cursor in place after writes, and can optionally clean blank lines at the end
+of the buffer.
+
+Requirements: Neovim 0.9+ (uses |nvim_buf_attach()| with on_lines).
+
+==============================================================================
+INSTALL                                                    *wsbutler.nvim-install*
+lazy.nvim~
+>lua
+{
+  "roife/wsbutler.nvim",
+  opts = {
+    trim_eob = false,
+    ignore_filetypes = {},
+  },
+}
+<
+
+packer.nvim~
+>lua
+use({
+  "roife/wsbutler.nvim",
+  config = function()
+    require("wsbutler").setup({
+      trim_eob = false,
+      ignore_filetypes = {},
+    })
+  end,
+})
+<
+
+==============================================================================
+USAGE                                                       *wsbutler.nvim-usage*
+- The plugin auto-runs when installed (via plugin/wsbutler.lua) unless
+  |g:wsbutler_disable| is set.
+- Optional global opts before load: >
+    let g:wsbutler_opts = { 'trim_eob': v:true }
+<
+- Manual setup from Lua: >
+    require("wsbutler").setup()
+<
+
+==============================================================================
+OPTIONS                                                    *wsbutler.nvim-options*
+All options are keys in the table passed to `setup()`.
+
+trim_eob (boolean)~
+    Trim blank lines at end-of-buffer on write. Default: false.
+
+ignore_filetypes (table)~
+    List of filetypes to skip entirely. Example: `{ "markdown", "gitcommit" }`.
+
+==============================================================================
+TIPS                                                       *wsbutler.nvim-tips*
+- Temporarily disable: `let g:wsbutler_disable = 1` before loading the plugin.
+- Regenerate help tags after installing this doc: `:helptags ALL` or
+  `:helptags path/to/doc`.
+
+==============================================================================
+LICENSE                                                    *wsbutler.nvim-license*
+MIT. See LICENSE in the repository.
+
+vim:tw=78:ts=8:ft=help:norl:
