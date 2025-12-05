@@ -48,8 +48,16 @@ local function mark_changed_range(bufnr, start_row, old_end_row, new_end_row)
 
   -- If the change happens in the same line, do not add extmark
   if start_row + 1 == old_end_row and old_end_row == new_end_row then
-    local marks = vim.api.nvim_buf_get_extmarks(bufnr, NS, { start_row, 0 }, { old_end_row, 0 }, {})
+    local marks = vim.api.nvim_buf_get_extmarks(bufnr, NS, { start_row, 0 }, { old_end_row, 0 }, { overlap = true })
     if #marks > 0 then
+      return
+    end
+  end
+
+  -- If the change happrenss by adding a new line at the end of the modified range, do not add extmark
+  if start_row + 1 == old_end_row and old_end_row + 1 == new_end_row then
+    local marks = vim.api.nvim_buf_get_extmarks(bufnr, NS, { new_end_row, 0 }, { new_end_row, 0 }, { details = true, overlap = true })
+    if #marks ~= 0 and marks[#marks][4].end_row == new_end_row then
       return
     end
   end
