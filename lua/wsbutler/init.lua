@@ -101,7 +101,7 @@ end
 local TRAIL_WS_PATTERN = "%s+$"
 
 local function trim_trailing_whitespace_in_ranges(bufnr, ranges)
-  if #ranges == 0 then
+  if not ranges or #ranges == 0 then
     return
   end
 
@@ -110,18 +110,15 @@ local function trim_trailing_whitespace_in_ranges(bufnr, ranges)
     local end_row = range[2]
 
     local lines = vim.api.nvim_buf_get_lines(bufnr, start_row, end_row, false)
-    local changed = false
 
     for i, line in ipairs(lines) do
       local s = line:find(TRAIL_WS_PATTERN)
       if s then
-        lines[i] = line:sub(1, s - 1)
-        changed = true
-      end
-    end
+        local new_line = line:sub(1, s - 1)
+        local row = start_row + i - 1
 
-    if changed then
-      vim.api.nvim_buf_set_lines(bufnr, start_row, end_row, false, lines)
+        vim.api.nvim_buf_set_lines(bufnr, row, row + 1, false, { new_line })
+      end
     end
   end
 end
