@@ -17,54 +17,63 @@ local function filetype_ignored(bufnr)
   return ft ~= "" and vim.tbl_contains(config.ignore_filetypes, ft)
 end
 
+local ignored_events = { "all", "TextChanged", "TextChangedI", "TextChangedP" }
 local function should_ignore(bufnr)
-  if not vim.api.nvim_buf_is_loaded(bufnr) then
-    return true
+  if suspend[bufnr] then return true end
+
+  if not vim.api.nvim_buf_is_loaded(bufnr) then return true end
+
+  local ei = vim.o.eventignore
+  if ei and ei ~= "" then
+    for _, ev in ipairs(ignored_events) do
+      if ei:find(ev, 1, true) ~= nil then return true end
+    end
   end
 
-  if filetype_ignored(bufnr) then
-    return true
-  end
+  if filetype_ignored(bufnr) then return true end
 
-  if vim.api.nvim_get_option_value("buftype", { buf = bufnr }) ~= "" then
-    return true
-  end
+  if vim.api.nvim_get_option_value("buftype", { buf = bufnr }) ~= "" then return true end
 
-  if vim.api.nvim_get_option_value("readonly", { buf = bufnr }) then
-    return true
-  end
+  if vim.api.nvim_get_option_value("readonly", { buf = bufnr }) then return true end
 
-  if not vim.api.nvim_get_option_value("modifiable", { buf = bufnr }) then
-    return true
-  end
+  if not vim.api.nvim_get_option_value("modifiable", { buf = bufnr }) then return true end
 
   return false
 end
 
-local function mark_changed_range(bufnr, start_row, old_end_row, new_end_row)
-  if suspend[bufnr] or start_row == new_end_row then
-    return
-  end
+local function mark_changed_range(bufnr, start_row, start_col, new_end_row, new_end_col)
+  local new_end_pos = { new_end_row, new_end_col }
 
-  -- If the change happens in the same line, do not add extmark
-  if start_row + 1 == old_end_row and old_end_row == new_end_row then
-    local marks = vim.api.nvim_buf_get_extmarks(bufnr, NS, { start_row, 0 }, { old_end_row, 0 }, { overlap = true })
-    if #marks > 0 then
-      return
-    end
-  end
+  local start_line_count = #vim.api.nvim_buf_get_lines(bufnr, start_row, start_row + 1, false)[1]
+  if start_col == start_line_count then start_row = start_row + 1 end
 
-  -- If the change happrenss by adding a new line at the end of the modified range, do not add extmark
-  if start_row + 1 == old_end_row and old_end_row + 1 == new_end_row then
-    local marks = vim.api.nvim_buf_get_extmarks(bufnr, NS, { new_end_row, 0 }, { new_end_row, 0 }, { details = true, overlap = true })
-    if #marks ~= 0 and marks[#marks][4].end_row == new_end_row then
-      return
-    end
+  local num_lines = vim.api.nvim_buf_line_count(bufnr)
+  if new_end_row == num_lines - 1 then
+    local marks = vim.api.nvim_buf_get_extmarks(
+      bufnr,
+      NS,
+      { new_end_row, 0 },
+      new_end_pos,
+      { details = true, limit = 1 }
+    )
+    if #marks > 0 then return end
+    new_end_col = #vim.api.nvim_buf_get_lines(0, -2, -1, false)[1]
+  else
+    local marks = vim.api.nvim_buf_get_extmarks(
+      bufnr,
+      NS,
+      new_end_pos,
+      new_end_pos,
+      { details = true, overlap = true, limit = 1 }
+    )
+    if #marks > 0 then return end
+    if new_end_col ~= 0 then new_end_row = new_end_row + 1 end
+    new_end_col = 0
   end
 
   vim.api.nvim_buf_set_extmark(bufnr, NS, start_row, 0, {
-    end_row = old_end_row,
-    end_col = 0,
+    end_row = new_end_row,
+    end_col = new_end_col,
     right_gravity = false,
     end_right_gravity = true,
   })
@@ -79,9 +88,6 @@ local function get_merged_modified_ranges(bufnr)
   for _, mark in ipairs(marks) do
     local start_row = mark[2]
     local end_row = mark[4].end_row
-    if start_row == end_row then
-      goto continue
-    end
 
     if not cur_start then
       cur_start, cur_end = start_row, end_row
@@ -89,9 +95,7 @@ local function get_merged_modified_ranges(bufnr)
     end
 
     if start_row <= cur_end then
-      if end_row > cur_end then
-        cur_end = end_row
-      end
+      if end_row > cur_end then cur_end = end_row end
       goto continue
     end
 
@@ -100,22 +104,20 @@ local function get_merged_modified_ranges(bufnr)
     ::continue::
   end
 
-  if cur_start then
-    merged[#merged + 1] = { cur_start, cur_end }
-  end
+  if cur_start then merged[#merged + 1] = { cur_start, cur_end } end
   return merged
 end
 
 local TRAIL_WS_PATTERN = "%s+$"
 
 local function trim_trailing_whitespace_in_ranges(bufnr, ranges)
-  if not ranges or #ranges == 0 then
-    return
-  end
+  if not ranges or #ranges == 0 then return end
+  local num_lines = vim.api.nvim_buf_line_count(bufnr)
 
   for _, range in ipairs(ranges) do
     local start_row = range[1]
     local end_row = range[2]
+    if start_row == num_lines - 1 then end_row = -1 end
 
     local lines = vim.api.nvim_buf_get_lines(bufnr, start_row, end_row, false)
 
@@ -147,23 +149,17 @@ end
 
 local function save_cursor(bufnr)
   local win = vim.api.nvim_get_current_win()
-  if vim.api.nvim_win_get_buf(win) ~= bufnr then
-    return
-  end
+  if vim.api.nvim_win_get_buf(win) ~= bufnr then return end
 
   vim.b[bufnr].wsbutler_last_cursor = vim.api.nvim_win_get_cursor(win)
 end
 
 local function restore_cursor(bufnr)
   local win = vim.api.nvim_get_current_win()
-  if vim.api.nvim_win_get_buf(win) ~= bufnr then
-    return
-  end
+  if vim.api.nvim_win_get_buf(win) ~= bufnr then return end
 
   local pos = vim.b[bufnr].wsbutler_last_cursor
-  if not pos then
-    return
-  end
+  if not pos then return end
 
   local line_count = vim.api.nvim_buf_line_count(bufnr)
   pos[1] = math.min(pos[1], line_count)
@@ -182,22 +178,35 @@ function M.setup(opts)
     group = aug,
     callback = function(args)
       local bufnr = args.buf
-      if attached[bufnr] or should_ignore(bufnr) then
-        return
-      end
+      if attached[bufnr] or should_ignore(bufnr) then return end
 
       attached[bufnr] = true
 
       vim.api.nvim_buf_attach(bufnr, false, {
-        on_lines = function(_, buf, _, first, old_last, new_last)
-          if should_ignore(buf) then
-            return
-          end
-          mark_changed_range(buf, first, old_last, new_last)
+        on_bytes = function(
+          _,
+          buf,
+          _,
+          start_row,
+          start_col,
+          _,
+          _,
+          _,
+          _,
+          new_end_row,
+          new_end_col,
+          _
+        )
+          if should_ignore(buf) then return end
+          vim.schedule(function()
+            if new_end_row == 0 then new_end_col = start_col + new_end_col end
+            new_end_row = start_row + new_end_row
+            if start_row == new_end_row and start_col == new_end_col then return end
+
+            mark_changed_range(buf, start_row, start_col, new_end_row, new_end_col)
+          end)
         end,
-        on_detach = function(_, buf)
-          attached[buf] = nil
-        end,
+        on_detach = function(_, buf) attached[buf] = nil end,
       })
     end,
   })
@@ -206,9 +215,7 @@ function M.setup(opts)
     group = aug,
     callback = function(args)
       local bufnr = args.buf
-      if should_ignore(bufnr) then
-        return
-      end
+      if should_ignore(bufnr) then return end
 
       save_cursor(bufnr)
 
@@ -216,9 +223,7 @@ function M.setup(opts)
 
       suspend[bufnr] = true
       trim_trailing_whitespace_in_ranges(bufnr, ranges)
-      if config.trim_eob then
-        trim_eob_blank_lines(bufnr)
-      end
+      if config.trim_eob then trim_eob_blank_lines(bufnr) end
       suspend[bufnr] = nil
 
       vim.api.nvim_buf_clear_namespace(bufnr, NS, 0, -1)
@@ -229,9 +234,7 @@ function M.setup(opts)
     group = aug,
     callback = function(args)
       local bufnr = args.buf
-      if should_ignore(bufnr) then
-        return
-      end
+      if should_ignore(bufnr) then return end
 
       restore_cursor(bufnr)
     end,
@@ -239,3 +242,4 @@ function M.setup(opts)
 end
 
 return M
+
