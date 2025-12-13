@@ -144,7 +144,9 @@ local function trim_eob_blank_lines(bufnr)
     end
   end
 
-  vim.api.nvim_buf_set_lines(bufnr, last_nonblank + 1, -1, false, {})
+  if last_nonblank < #lines then
+    vim.api.nvim_buf_set_lines(bufnr, last_nonblank + 1, -1, false, {})
+  end
 end
 
 local function save_cursor(bufnr)
