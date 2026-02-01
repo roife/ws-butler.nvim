@@ -57,7 +57,7 @@ local function mark_changed_range(bufnr, start_row, start_col, new_end_row, new_
       { details = true, limit = 1 }
     )
     if #marks > 0 then return end
-    new_end_col = #vim.api.nvim_buf_get_lines(0, -2, -1, false)[1]
+    new_end_col = #vim.api.nvim_buf_get_lines(bufnr, -2, -1, false)[1]
   else
     local marks = vim.api.nvim_buf_get_extmarks(
       bufnr,
