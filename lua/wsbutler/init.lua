@@ -117,7 +117,7 @@ local function trim_trailing_whitespace_in_ranges(bufnr, ranges)
   for _, range in ipairs(ranges) do
     local start_row = range[1]
     local end_row = range[2]
-    if start_row == num_lines - 1 then end_row = -1 end
+    if end_row == num_lines - 1 then end_row = -1 end
 
     local lines = vim.api.nvim_buf_get_lines(bufnr, start_row, end_row, false)
 
