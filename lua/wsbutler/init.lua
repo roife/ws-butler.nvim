@@ -200,13 +200,11 @@ function M.setup(opts)
           _
         )
           if should_ignore(buf) then return end
-          vim.schedule(function()
-            if new_end_row == 0 then new_end_col = start_col + new_end_col end
-            new_end_row = start_row + new_end_row
-            if start_row == new_end_row and start_col == new_end_col then return end
+          if new_end_row == 0 then new_end_col = start_col + new_end_col end
+          new_end_row = start_row + new_end_row
+          if start_row == new_end_row and start_col == new_end_col then return end
 
-            mark_changed_range(buf, start_row, start_col, new_end_row, new_end_col)
-          end)
+          mark_changed_range(buf, start_row, start_col, new_end_row, new_end_col)
         end,
         on_detach = function(_, buf) attached[buf] = nil end,
       })
@@ -244,4 +242,3 @@ function M.setup(opts)
 end
 
 return M
-
