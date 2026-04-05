@@ -145,7 +145,7 @@ local function trim_eob_blank_lines(bufnr)
   end
 
   if last_nonblank < #lines then
-    vim.api.nvim_buf_set_lines(bufnr, last_nonblank + 1, -1, false, {})
+    vim.api.nvim_buf_set_lines(bufnr, last_nonblank, -1, false, {})
   end
 end
 
