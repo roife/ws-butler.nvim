@@ -98,6 +98,104 @@ run_case("issue-3-multiline-range-ending-at-eof", { trim_eob = false }, {
   end,
 })
 
+run_case("edge-1-blank-only-buffer-collapses-to-single-empty-line", { trim_eob = true }, {
+  initial_lines = { "", "", "", "" },
+  run = function(bufnr)
+    vim.cmd("silent write")
+
+    expect_lines(
+      "edge-1-blank-only-buffer-collapses-to-single-empty-line",
+      current_lines(bufnr),
+      { "" }
+    )
+  end,
+})
+
+run_case("edge-2-long-trailing-whitespace-at-eof", { trim_eob = true }, {
+  initial_lines = {
+    "prefix",
+    string.rep("x", 2048) .. string.rep(" ", 1024) .. "\t\t",
+    "",
+    "",
+  },
+  run = function(bufnr)
+    vim.api.nvim_buf_set_text(bufnr, 1, 0, 1, 0, { "!" })
+    flush(50)
+
+    vim.cmd("silent write")
+
+    expect_lines(
+      "edge-2-long-trailing-whitespace-at-eof",
+      current_lines(bufnr),
+      { "prefix", "!" .. string.rep("x", 2048) }
+    )
+  end,
+})
+
+run_case("edge-3-disjoint-ranges-trim-only-modified-lines", { trim_eob = false }, {
+  initial_lines = {
+    "first   ",
+    "keep middle   ",
+    "third\t\t",
+    "tail",
+  },
+  run = function(bufnr)
+    vim.api.nvim_buf_set_text(bufnr, 0, 0, 0, 0, { ">" })
+    vim.api.nvim_buf_set_text(bufnr, 2, 0, 2, 0, { "<" })
+    flush(50)
+
+    vim.cmd("silent write")
+
+    expect_lines(
+      "edge-3-disjoint-ranges-trim-only-modified-lines",
+      current_lines(bufnr),
+      { ">first", "keep middle   ", "<third", "tail" }
+    )
+  end,
+})
+
+run_case("edge-4-replace-whole-buffer-with-blank-lines", { trim_eob = true }, {
+  initial_lines = { "alpha  ", "beta", "gamma" },
+  run = function(bufnr)
+    vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { "", "", "" })
+    flush(50)
+
+    vim.cmd("silent write")
+
+    expect_lines(
+      "edge-4-replace-whole-buffer-with-blank-lines",
+      current_lines(bufnr),
+      { "" }
+    )
+  end,
+})
+
+run_case("edge-5-repeated-write-is-idempotent", { trim_eob = true }, {
+  initial_lines = { "alpha  ", "beta\t\t", "", "" },
+  run = function(bufnr)
+    vim.api.nvim_buf_set_text(bufnr, 0, 5, 0, 5, { " " })
+    vim.api.nvim_buf_set_text(bufnr, 1, 4, 1, 4, { "\t" })
+    flush(50)
+
+    vim.cmd("silent write")
+    local once = current_lines(bufnr)
+
+    vim.cmd("silent write")
+    local twice = current_lines(bufnr)
+
+    expect_lines(
+      "edge-5-repeated-write-is-idempotent-first-pass",
+      once,
+      { "alpha", "beta" }
+    )
+    expect_lines(
+      "edge-5-repeated-write-is-idempotent-second-pass",
+      twice,
+      { "alpha", "beta" }
+    )
+  end,
+})
+
 if #failures > 0 then
   for _, failure in ipairs(failures) do
     io.stderr:write("FAIL: " .. failure.label .. "\n")
